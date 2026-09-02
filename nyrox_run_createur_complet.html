@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Nyrox Run — Death Run</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070a12;color:#fff;font-family:Arial,sans-serif}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#hud{position:fixed;inset:0;pointer-events:none}
+.top{display:flex;gap:8px;padding:12px;justify-content:space-between}
+.badge{background:#111827e8;border:1px solid #ffffff22;border-radius:14px;padding:9px 12px;font-weight:900;box-shadow:0 8px 30px #0005}
+#message{position:absolute;top:88px;left:50%;transform:translateX(-50%);font-size:24px;font-weight:900;text-align:center;text-shadow:0 3px 12px #000;white-space:nowrap}
+#panel{position:absolute;right:12px;bottom:12px;width:min(390px,calc(100% - 24px));background:#111827f2;border:1px solid #ffffff22;border-radius:18px;padding:12px;pointer-events:auto;box-shadow:0 15px 50px #0008}
+#panel h3{margin:0 0 8px;font-size:16px}
+button{border:0;border-radius:12px;background:#fff;color:#111;font-weight:900;padding:11px 13px;margin:3px;cursor:pointer}
+button.active{outline:3px solid #5de0ff}
+#tools{display:none}
+#touch{display:none;position:fixed;left:12px;right:12px;bottom:125px;justify-content:space-between;pointer-events:none}
+.touchGroup{display:flex;gap:9px}
+.touchBtn{width:62px;height:62px;border-radius:18px;background:#111827dd;color:#fff;border:1px solid #ffffff33;font-size:25px;pointer-events:auto;touch-action:none}
+#win{display:none;position:fixed;inset:0;background:#05070dea;align-items:center;justify-content:center;z-index:20}
+.winCard{background:#121827;border:1px solid #ffffff22;border-radius:24px;padding:30px;text-align:center;min-width:280px}
+@media(max-width:700px){
+ .top{padding:7px;gap:4px}.badge{padding:7px 8px;font-size:11px;border-radius:11px}
+ #message{top:74px;font-size:20px}
+ #panel{left:8px;right:8px;bottom:8px;width:auto;text-align:center;padding:8px}
+ #panel h3{font-size:14px}
+ #panel button{font-size:12px;padding:9px 10px}
+ #touch{display:flex}
+}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="top">
+    <div class="badge">🎮 NYROX RUN</div>
+    <div class="badge">⏱ <span id="timer">0.0</span>s</div>
+    <div class="badge">🚩 <span id="checkpoint">0</span>/3</div>
+  </div>
+  <div id="message">Saute et esquive les pièges !</div>
+</div>
+
+<div id="panel">
+  <h3>🛠️ MODE CRÉATIF</h3>
+  <button id="creator">🔐 Créateur</button>
+  <button id="build" style="display:none">Construire</button>
+  <button id="play" style="display:none">▶ Jouer</button>
+  <button id="save">💾 Sauvegarder</button>
+  <div id="tools">
+    <button data-tool="platform">🟦 Plateforme</button>
+    <button data-tool="block">🧱 Obstacle</button>
+    <button data-tool="spike">🔺 Piège</button>
+    <button id="deleteMode">🗑️ Retirer</button>
+    <button id="clearObjects">🧹 Tout retirer</button>
+    <button id="resetMap">↩️ Map d'origine</button>
+    <button id="adminMessage">📢 Message</button>
+    <button id="creatorPower">👑 Pouvoirs OFF</button>
+  </div>
+</div>
+
+<div id="creatorLogin" style="display:none;position:fixed;inset:0;background:#000b;z-index:30;align-items:center;justify-content:center">
+  <div style="background:#121827;border:1px solid #ffffff22;border-radius:20px;padding:24px;width:min(340px,90%);text-align:center">
+    <h2>🔐 Accès Créateur</h2>
+    <p>Entre le code créateur.</p>
+    <input id="creatorCode" inputmode="numeric" maxlength="4" type="password"
+      style="width:100%;padding:13px;border-radius:12px;border:0;text-align:center;font-size:22px;letter-spacing:6px">
+    <div style="margin-top:10px">
+      <button id="loginCreator">Valider</button>
+      <button id="cancelCreator">Annuler</button>
+    </div>
+    <div id="loginError" style="color:#ff718f;margin-top:8px"></div>
+  </div>
+</div>
+<div id="messageBox" style="display:none;position:fixed;inset:0;background:#000b;z-index:31;align-items:center;justify-content:center">
+  <div style="background:#121827;border:1px solid #ffffff22;border-radius:20px;padding:22px;width:min(380px,90%);text-align:center">
+    <h2>📢 Message aux joueurs</h2>
+    <input id="adminText" maxlength="100" placeholder="Écris ton message..." style="width:100%;padding:13px;border-radius:12px;border:0;font-size:16px">
+    <div style="margin-top:10px"><button id="sendMessage">Afficher</button><button id="cancelMessage">Annuler</button></div>
+  </div>
+</div>
+<div id="touch">
+  <div class="touchGroup">
+    <button class="touchBtn" id="left">◀</button>
+    <button class="touchBtn" id="right">▶</button>
+  </div>
+  <div class="touchGroup"><button class="touchBtn" id="jump">⬆</button></div>
+</div>
+
+
+<div id="tutorial" style="display:flex;position:fixed;inset:0;background:#05070df2;z-index:40;align-items:center;justify-content:center;padding:18px">
+  <div style="background:#121827;border:1px solid #ffffff22;border-radius:24px;padding:24px;width:min(430px,94%);text-align:center;box-shadow:0 20px 70px #0009">
+    <div style="font-size:42px">🎮</div>
+    <h1 style="margin:5px 0 8px">Bienvenue dans Nyrox Run</h1>
+    <p style="margin:0 0 16px;color:#cbd5e1">Voici comment jouer :</p>
+    <div style="text-align:left;background:#0b1020;border-radius:16px;padding:14px;line-height:1.65">
+      <b>🏃 Avancer :</b> maintiens <b>▶</b> ou la touche <b>D</b><br>
+      <b>↩️ Reculer :</b> <b>◀</b> ou <b>A</b><br>
+      <b>🦘 Sauter :</b> <b>⬆</b>, <b>W</b> ou <b>Espace</b><br>
+      <b>🔺 Pièges :</b> saute ou esquive-les<br>
+      <b>🚩 Checkpoints :</b> ils te permettent de recommencer plus loin<br>
+      <b>🏁 Objectif :</b> atteins l'arrivée le plus vite possible !
+    </div>
+    <button id="startTutorial" style="margin-top:16px;font-size:17px;padding:13px 25px">🚀 C'est parti !</button>
+  </div>
+</div>
+
+<div id="win">
+ <div class="winCard">
+  <h1>🏆 Victoire !</h1>
+  <p>Temps : <b id="finalTime">0.0 s</b></p>
+  <button id="again">Rejouer</button>
+ </div>
+</div>
+
+<script>
+(() => {
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const playerSprite=new Image();
+playerSprite.src="mario_character.png";
+let dpr=1,W=0,H=0;
+function resize(){
+ dpr=Math.min(devicePixelRatio||1,2);
+ W=innerWidth; H=innerHeight;
+ canvas.width=Math.floor(W*dpr); canvas.height=Math.floor(H*dpr);
+ canvas.style.width=W+"px"; canvas.style.height=H+"px";
+ ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener("resize",resize); resize();
+
+const BASE_PLATFORMS=[
+ {x:0,y:460,w:650,h:45},{x:760,y:460,w:500,h:45},
+ {x:1380,y:460,w:520,h:45},{x:2020,y:460,w:720,h:45},{x:2860,y:460,w:550,h:45}
+];
+const BASE_BLOCKS=[
+ {x:390,y:380,w:48,h:80},{x:860,y:370,w:50,h:90},{x:1090,y:335,w:55,h:125},
+ {x:1510,y:370,w:50,h:90},{x:1730,y:320,w:55,h:140},{x:2180,y:370,w:50,h:90},
+ {x:2410,y:345,w:55,h:115},{x:3020,y:370,w:50,h:90}
+];
+const BASE_SPIKES=[
+ {x:545,y:440,w:90,h:20},{x:950,y:440,w:90,h:20},{x:1160,y:440,w:80,h:20},
+ {x:1570,y:440,w:100,h:20},{x:1830,y:440,w:80,h:20},{x:2250,y:440,w:100,h:20},
+ {x:2590,y:440,w:100,h:20},{x:3150,y:440,w:100,h:20}
+];
+
+let platforms=[],blocks=[],spikes=[];
+function clone(a){return a.map(o=>({...o}))}
+function resetMap(){platforms=clone(BASE_PLATFORMS);blocks=clone(BASE_BLOCKS);spikes=clone(BASE_SPIKES)}
+function saveMap(){localStorage.setItem("shadowRunMap",JSON.stringify({platforms,blocks,spikes}));setMessage("💾 Map sauvegardée !")}
+function loadMap(){
+ try{
+  const v=JSON.parse(localStorage.getItem("shadowRunMap")||"null");
+  if(v&&Array.isArray(v.platforms)&&Array.isArray(v.blocks)&&Array.isArray(v.spikes)){
+   platforms=v.platforms;blocks=v.blocks;spikes=v.spikes;return;
+  }
+ }catch(e){}
+ resetMap();
+}
+loadMap();
+
+const keys={left:false,right:false,jump:false};
+let mode="play",tool="platform",camera=0,finished=false,startTime=performance.now(),last=performance.now();
+let creatorPower=false;
+let commandSpeed=1;
+let commandSuperJump=false;
+let commandFly=false;
+let commandNoclip=false;
+let commandInvisible=false;
+let commandGod=false;
+const player={x:90,y:420,w:30,h:40,vx:0,vy:0,onGround:false,checkpoint:0};
+
+function setMessage(t){document.getElementById("message").textContent=t}
+function respawn(){
+ player.x=player.checkpoint===0?90:([760,1380,2020][player.checkpoint-1]+35);
+ player.y=420;player.vx=0;player.vy=0;
+ setMessage("💥 Piège ! Retour au checkpoint");
+ setTimeout(()=>{if(!finished&&mode==="play")setMessage("Saute et esquive les pièges !")},800);
+}
+function rectHit(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y}
+
+function setKey(k,v){keys[k]=v}
+addEventListener("keydown",e=>{
+ const k=e.key.toLowerCase();
+ if(k==="a"||k==="arrowleft")setKey("left",true);
+ if(k==="d"||k==="arrowright")setKey("right",true);
+ if(k==="w"||k==="arrowup"||e.code==="Space")setKey("jump",true);
+ if(k==="1")chooseTool("platform");
+ if(k==="2")chooseTool("block");
+ if(k==="3")chooseTool("spike");
+ if(k==="r")startGame();
+});
+addEventListener("keyup",e=>{
+ const k=e.key.toLowerCase();
+ if(k==="a"||k==="arrowleft")setKey("left",false);
+ if(k==="d"||k==="arrowright")setKey("right",false);
+ if(k==="w"||k==="arrowup"||e.code==="Space")setKey("jump",false);
+});
+
+function hold(id,key){
+ const el=document.getElementById(id);
+ const on=e=>{e.preventDefault();setKey(key,true)}
+ const off=e=>{e.preventDefault();setKey(key,false)}
+ el.addEventListener("pointerdown",on);el.addEventListener("pointerup",off);
+ el.addEventListener("pointercancel",off);el.addEventListener("pointerleave",off);
+}
+hold("left","left");hold("right","right");hold("jump","jump");
+
+function chooseTool(t){
+ tool=t;
+ document.querySelectorAll("[data-tool]").forEach(b=>b.classList.toggle("active",b.dataset.tool===t));
+ const label=t==="platform"?"Plateforme":t==="block"?"Obstacle":t==="spike"?"Piège":"Retirer";
+ setMessage("🛠️ "+label+" sélectionné");
+}
+document.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>chooseTool(b.dataset.tool));
+
+const creatorLogin=document.getElementById("creatorLogin");
+document.getElementById("creator").onclick=()=>{
+  creatorLogin.style.display="flex";
+  document.getElementById("creatorCode").value="";
+  document.getElementById("loginError").textContent="";
+  setTimeout(()=>document.getElementById("creatorCode").focus(),50);
+};
+document.getElementById("cancelCreator").onclick=()=>creatorLogin.style.display="none";
+document.getElementById("loginCreator").onclick=()=>{
+  if(document.getElementById("creatorCode").value==="1312"){
+    creatorLogin.style.display="none";
+    document.getElementById("creator").style.display="none";
+    document.getElementById("build").style.display="inline-block";
+    setMessage("👑 Mode Créateur débloqué !");
+  }else{
+    document.getElementById("loginError").textContent="Code incorrect.";
+  }
+};
+document.getElementById("creatorCode").addEventListener("keydown",e=>{
+  if(e.key==="Enter")document.getElementById("loginCreator").click();
+});
+
+document.getElementById("build").onclick=()=>{
+ mode="build";
+ document.getElementById("build").style.display="none";
+ document.getElementById("play").style.display="inline-block";
+ document.getElementById("tools").style.display="block";
+ setMessage("Clique sur la map pour construire");
+};
+document.getElementById("play").onclick=startGame;
+document.getElementById("save").onclick=saveMap;
+document.getElementById("again").onclick=startGame;
+document.getElementById("startTutorial").onclick=()=>{
+  document.getElementById("tutorial").style.display="none";
+  startGame();
+};
+
+
+document.getElementById("deleteMode").onclick=()=>chooseTool("delete");
+document.getElementById("clearObjects").onclick=()=>{
+  if(mode!=="build")return setMessage("Active d'abord le mode Créateur");
+  platforms=[];blocks=[];spikes=[];saveMap();setMessage("🧹 Tous les objets retirés !");
+};
+document.getElementById("resetMap").onclick=()=>{
+  resetMap();saveMap();setMessage("↩️ Map d'origine restaurée !");
+};
+document.getElementById("creatorPower").onclick=()=>{
+  creatorPower=!creatorPower;
+  commandSpeed=creatorPower?2:1;
+  commandSuperJump=creatorPower;
+  commandFly=creatorPower;
+  commandGod=creatorPower;
+  document.getElementById("creatorPower").textContent=creatorPower?"👑 Pouvoirs ON":"👑 Pouvoirs OFF";
+  setMessage(creatorPower?"👑 Tous les pouvoirs créateur sont activés !":"Pouvoirs créateur désactivés.");
+};
+
+document.querySelectorAll("[data-cmd]").forEach(btn=>{
+  btn.onclick=()=>{
+    if(mode!=="build" && !creatorPower){
+      setMessage("🔐 Active le mode Créateur");
+      return;
+    }
+    const c=btn.dataset.cmd;
+    if(c==="speed"){
+      commandSpeed=commandSpeed===2?1:2;
+      setMessage(commandSpeed===2?"⚡ Vitesse x2 activée":"⚡ Vitesse normale");
+    }
+    if(c==="jump"){
+      commandSuperJump=!commandSuperJump;
+      setMessage(commandSuperJump?"🦘 Super saut activé":"🦘 Super saut désactivé");
+    }
+    if(c==="fly"){
+      commandFly=!commandFly;
+      setMessage(commandFly?"🪽 Vol activé — utilise W/⬆ et S/⬇":"🪽 Vol désactivé");
+    }
+    if(c==="noclip"){
+      commandNoclip=!commandNoclip;
+      setMessage(commandNoclip?"👻 Noclip activé — tu traverses les murs":"👻 Noclip désactivé");
+    }
+    if(c==="invisible"){
+      commandInvisible=!commandInvisible;
+      setMessage(commandInvisible?"🫥 Invisibilité activée":"🫥 Invisibilité désactivée");
+    }
+    if(c==="god"){
+      commandGod=!commandGod;
+      setMessage(commandGod?"🛡️ Invincibilité activée":"🛡️ Invincibilité désactivée");
+    }
+    if(c==="checkpoint"){
+      player.checkpoint=Math.min(3,player.checkpoint+1);
+      document.getElementById("checkpoint").textContent=player.checkpoint;
+      setMessage("🚩 Checkpoint réglé sur "+player.checkpoint);
+    }
+    if(c==="finish"){
+      player.x=3315;
+      player.y=400;
+      setMessage("🏁 Arrivée !");
+    }
+    if(c==="respawn"){
+      player.checkpoint=0;
+      player.x=90; player.y=420; player.vx=0; player.vy=0;
+      document.getElementById("checkpoint").textContent="0";
+      setMessage("🔄 Retour au départ");
+    }
+    if(c==="clear"){
+      spikes=[];
+      saveMap();
+      setMessage("🧹 Tous les pièges ont été retirés !");
+    }
+  };
+});
+const messageBox=document.getElementById("messageBox");
+document.getElementById("adminMessage").onclick=()=>{
+  if(!document.getElementById("tools").style.display || document.getElementById("tools").style.display==="none"){
+    setMessage("🔐 Seul le Créateur peut envoyer un message");
+    return;
+  }
+  messageBox.style.display="flex";
+  document.getElementById("adminText").value="";
+};
+document.getElementById("cancelMessage").onclick=()=>messageBox.style.display="none";
+document.getElementById("sendMessage").onclick=()=>{
+  const text=document.getElementById("adminText").value.trim();
+  if(text){setMessage("📢 "+text);messageBox.style.display="none";}
+};
+
+canvas.addEventListener("pointerdown",e=>{
+ if(mode!=="build")return;
+ const r=canvas.getBoundingClientRect();
+ const wx=(e.clientX-r.left)+camera;
+ const wy=(e.clientY-r.top);
+ const x=Math.max(0,Math.round(wx/20)*20);
+ const y=Math.max(120,Math.min(455,Math.round(wy/20)*20));
+ if(tool==="delete"){
+   const point={x:wx,y:wy,w:1,h:1};
+   let removed=false;
+   for(let i=platforms.length-1;i>=0&&!removed;i--)if(rectHit(point,platforms[i])){platforms.splice(i,1);removed=true;}
+   for(let i=blocks.length-1;i>=0&&!removed;i--)if(rectHit(point,blocks[i])){blocks.splice(i,1);removed=true;}
+   for(let i=spikes.length-1;i>=0&&!removed;i--)if(rectHit(point,spikes[i])){spikes.splice(i,1);removed=true;}
+   setMessage(removed?"🗑️ Objet retiré":"Aucun objet ici");
+ } else {
+   if(tool==="platform")platforms.push({x,y,w:180,h:35});
+   if(tool==="block")blocks.push({x,y:y-80,w:50,h:80});
+   if(tool==="spike")spikes.push({x,y:y-20,w:80,h:20});
+   setMessage("Objet posé !");
+ }
+ saveMap();
+});
+
+function startGame(){
+ mode="play";finished=false;startTime=performance.now();
+ document.getElementById("build").style.display="inline-block";
+ document.getElementById("play").style.display="none";
+ document.getElementById("tools").style.display="none";
+ player.x=90;player.y=420;player.vx=0;player.vy=0;player.checkpoint=0;
+ document.getElementById("checkpoint").textContent="0";
+ document.getElementById("win").style.display="none";
+ setMessage("Saute et esquive les pièges !");
+}
+
+function update(dt){
+ if(mode!=="play"||finished)return;
+ const accel=1900,max=300,friction=Math.pow(.0005,dt);
+ if(keys.left)player.vx-=accel*dt;
+ if(keys.right)player.vx+=accel*dt;
+ if(!keys.left&&!keys.right)player.vx*=friction;
+ player.vx=Math.max(-max,Math.min(max,player.vx));
+ if(keys.jump&&player.onGround){player.vy=-690;player.onGround=false}
+ player.vy+=1700*dt;
+ const oldBottom=player.y+player.h;
+ player.x+=player.vx*dt;
+ player.y+=player.vy*dt;
+ player.onGround=false;
+
+ for(const p of platforms){
+  if(player.x+player.w>p.x&&player.x<p.x+p.w&&oldBottom<=p.y+3&&player.y+player.h>=p.y&&player.vy>=0){
+   player.y=p.y-player.h;player.vy=0;player.onGround=true;
+  }
+ }
+ const hitbox={x:player.x+3,y:player.y+3,w:24,h:34};
+ for(const s of spikes)if(rectHit(hitbox,s)){respawn();return}
+ for(const b of blocks)if(rectHit(hitbox,b)){respawn();return}
+ const cps=[760,1380,2020];
+ if(player.checkpoint<3&&player.x>cps[player.checkpoint]){
+  player.checkpoint++;
+  document.getElementById("checkpoint").textContent=player.checkpoint;
+  setMessage("🚩 Checkpoint atteint !");
+ }
+ if(player.y>H+300)respawn();
+ if(player.x>3310){
+  finished=true;
+  const t=(performance.now()-startTime)/1000;
+  document.getElementById("finalTime").textContent=t.toFixed(2)+" s";
+  document.getElementById("win").style.display="flex";
+ }
+ camera=Math.max(0,Math.min(3410-W,player.x-W*.32));
+}
+
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ const grad=ctx.createLinearGradient(0,0,0,H);grad.addColorStop(0,"#151a35");grad.addColorStop(1,"#070a12");
+ ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+
+ ctx.save();ctx.translate(-camera,0);
+ ctx.strokeStyle="#ffffff0b";ctx.lineWidth=1;
+ for(let x=0;x<3600;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+ for(let y=60;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(3600,y);ctx.stroke()}
+
+ for(const p of platforms){
+  ctx.fillStyle="#293044";ctx.fillRect(p.x,p.y,p.w,p.h);
+  ctx.fillStyle="#7b8498";ctx.fillRect(p.x,p.y,p.w,5);
+ }
+ for(const b of blocks){
+  ctx.fillStyle="#b43b65";ctx.fillRect(b.x,b.y,b.w,b.h);
+  ctx.fillStyle="#ff7197";ctx.fillRect(b.x,b.y,b.w,7);
+ }
+ for(const s of spikes){
+  ctx.fillStyle="#eef2f7";
+  for(let x=s.x;x<s.x+s.w;x+=16){
+   ctx.beginPath();ctx.moveTo(x,s.y+20);ctx.lineTo(x+8,s.y);ctx.lineTo(x+16,s.y+20);ctx.closePath();ctx.fill();
+  }
+ }
+ const cps=[760,1380,2020];
+ cps.forEach((x,i)=>{
+  ctx.fillStyle=i<player.checkpoint?"#63f6a0":"#ffd166";
+  ctx.fillRect(x,385,5,75);
+  ctx.font="bold 18px Arial";ctx.fillText("CP "+(i+1),x+10,380);
+ });
+ ctx.fillStyle="#63f6a0";ctx.fillRect(3300,350,8,110);
+ ctx.font="bold 25px Arial";ctx.fillText("ARRIVÉE",3250,325);
+
+ // Joueur : sprite fourni par l'utilisateur.
+ ctx.fillStyle="#0008";ctx.beginPath();ctx.ellipse(player.x+15,player.y+41,19,5,0,0,Math.PI*2);ctx.fill();
+ if(playerSprite.complete && playerSprite.naturalWidth){
+   ctx.drawImage(playerSprite,player.x-7,player.y-34,44,68);
+ } else {
+   ctx.fillStyle="#21d4fd";ctx.fillRect(player.x,player.y+11,30,29);
+   ctx.fillStyle="#8ef0ff";ctx.fillRect(player.x+3,player.y,24,17);
+ }
+
+ if(mode==="build"){
+  ctx.fillStyle="#ffffffaa";ctx.font="bold 16px Arial";
+  ctx.fillText("MODE CRÉATIF",camera+18,120);
+ }
+ ctx.restore();
+}
+
+function loop(now){
+ const dt=Math.min((now-last)/1000,0.032);last=now;
+ update(dt);draw();
+ if(mode==="play"&&!finished)document.getElementById("timer").textContent=((now-startTime)/1000).toFixed(1);
+ requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
